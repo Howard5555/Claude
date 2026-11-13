@@ -1,0 +1,423 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Coin Tree</title>
+<style>
+@font-face{font-family:Nunito;font-weight:900;src:url(node_modules/@fontsource/nunito/files/nunito-latin-900-normal.woff2) format('woff2');}
+html,body{margin:0;background:#000}
+canvas{display:block}
+</style>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js"}}</script>
+</head><body>
+<canvas id="out" width="1080" height="1920"></canvas>
+<script type="module">
+import * as THREE from 'three';
+
+const W = 1080, H = 1920, FPS = 30, DURATION = 5.0;
+
+/* ---------- helpers ---------- */
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;   // easeInOutCubic
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+
+/* ---------- renderer ---------- */
+const glCanvas = document.createElement('canvas');
+glCanvas.width = W; glCanvas.height = H;
+const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H, false);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 400);
+
+/* Sky: vertical gradient on a big sphere */
+const skyCanvas = document.createElement('canvas'); skyCanvas.width = 4; skyCanvas.height = 256;
+{
+  const g = skyCanvas.getContext('2d').createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0, '#3f8fe0'); g.addColorStop(.55, '#9fd0f5'); g.addColorStop(1, '#f6e7c8');
+  const c = skyCanvas.getContext('2d'); c.fillStyle = g; c.fillRect(0, 0, 4, 256);
+}
+const skyTex = new THREE.CanvasTexture(skyCanvas); skyTex.colorSpace = THREE.SRGBColorSpace;
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(300, 32, 16),
+  new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false })));
+scene.fog = new THREE.Fog(0xe9dcc4, 60, 160);
+
+/* Lighting: warm sun key + purple-tinted fill so shadows read violet, not grey */
+const hemi = new THREE.HemisphereLight(0xbfdcff, 0x7a5aa8, 1.25);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffe0a8, 3.2);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 120 });
+sun.shadow.bias = -0.0004; sun.shadow.radius = 4;
+scene.add(sun); scene.add(sun.target);
+
+/* Toon ramp: 3 hard bands */
+const ramp = new THREE.DataTexture(new Uint8Array([90, 90, 90, 255, 180, 180, 180, 255, 255, 255, 255, 255]), 3, 1);
+ramp.minFilter = ramp.magFilter = THREE.NearestFilter; ramp.needsUpdate = true;
+const toon = (color, extra = {}) => new THREE.MeshToonMaterial({ color, gradientMap: ramp, ...extra });
+
+/* Inverted-hull outline for the "2D drawn" look */
+const outlineMat = new THREE.MeshBasicMaterial({ color: 0x1a1420, side: THREE.BackSide });
+function outlined(mesh, thickness = 0.06) {
+  const o = new THREE.Mesh(mesh.geometry, outlineMat);
+  o.scale.setScalar(1 + thickness);
+  mesh.add(o);
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  return mesh;
+}
+
+/* ---------- ground: warm cobblestone ---------- */
+function cobbleTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 512;
+  const x = c.getContext('2d'); const r = rng(7);
+  x.fillStyle = '#b9a588'; x.fillRect(0, 0, 512, 512);
+  for (let row = 0; row < 16; row++) for (let col = 0; col < 12; col++) {
+    const w = 42, h = 32, ox = (row % 2) * 21;
+    const l = 70 + r() * 12;
+    x.fillStyle = `hsl(${32 + r() * 8},${22 + r() * 8}%,${l}%)`;
+    x.beginPath(); x.roundRect(col * w + ox + 2, row * h + 2, w - 4, h - 4, 9); x.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(18, 18);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), toon(0xffffff, { map: cobbleTexture() }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+/* dirt patch where the coin gets planted */
+const PLANT = new THREE.Vector3(0.9, 0, 0.6);
+const dirt = new THREE.Mesh(new THREE.CircleGeometry(0.75, 32), toon(0x6b4a33));
+dirt.rotation.x = -Math.PI / 2; dirt.position.copy(PLANT).setY(0.01); dirt.receiveShadow = true; scene.add(dirt);
+
+/* ---------- town backdrop ---------- */
+function windowTexture(wallHex) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+  const x = c.getContext('2d');
+  x.fillStyle = wallHex; x.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+    const px = 40 + i * 120, py = 40 + j * 120;
+    x.fillStyle = '#7c2333'; x.fillRect(px - 14, py - 4, 12, 70); x.fillRect(px + 58, py - 4, 12, 70); // shutters
+    x.fillStyle = '#e9f3ff'; x.fillRect(px, py, 56, 62);
+    x.strokeStyle = '#3b3140'; x.lineWidth = 5; x.strokeRect(px, py, 56, 62);
+    x.beginPath(); x.moveTo(px + 28, py); x.lineTo(px + 28, py + 62); x.moveTo(px, py + 31); x.lineTo(px + 56, py + 31); x.stroke();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+}
+const walls = ['#f1dcae', '#f4c9a0', '#e8e0c8', '#f0d29a'];
+const roofs = [0xd9623b, 0xc4553a, 0x8a5d9e, 0xd97f3b];
+function house(x, z, w, h, d, k) {
+  const g = new THREE.Group();
+  const tex = windowTexture(walls[k % 4]); tex.repeat.set(w / 4, h / 4);
+  const body = outlined(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toon(0xffffff, { map: tex })), 0.012);
+  body.position.y = h / 2; g.add(body);
+  const roof = outlined(new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.78, h * 0.45, 4), toon(roofs[k % 4])), 0.02);
+  roof.position.y = h + h * 0.22; roof.rotation.y = Math.PI / 4; roof.scale.set(w / Math.max(w, d), 1, d / Math.max(w, d));
+  g.add(roof);
+  g.position.set(x, 0, z); scene.add(g); return g;
+}
+[[-14, -16, 7, 9, 6], [-6, -19, 7, 11, 6], [2, -18, 7, 8, 6], [10, -17, 7, 10, 6], [18, -15, 6, 9, 6],
+ [-20, -6, 6, 9, 7], [22, -4, 6, 8, 7]].forEach((p, i) => house(...p, i));
+
+/* low-poly trees around */
+function bush(x, z, s) {
+  const g = new THREE.Group();
+  const trunk = outlined(new THREE.Mesh(new THREE.CylinderGeometry(.12 * s, .16 * s, 1.2 * s, 8), toon(0x7a4b2a)), .05);
+  trunk.position.y = .6 * s; g.add(trunk);
+  const crown = outlined(new THREE.Mesh(new THREE.IcosahedronGeometry(.9 * s, 1), toon(0x4caf50, { flatShading: true })), .04);
+  crown.position.y = 1.6 * s; g.add(crown);
+  g.position.set(x, 0, z); scene.add(g);
+}
+bush(-9, -9, 1.6); bush(8, -10, 1.4); bush(-16, 2, 1.8); bush(15, 3, 1.5);
+
+/* ---------- face textures (2D drawn faces on 3D heads) ---------- */
+function faceTexture(kind) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d'); x.lineCap = 'round'; x.strokeStyle = '#1a1420'; x.fillStyle = '#1a1420'; x.lineWidth = 12;
+  const eye = (cx, cy) => {
+    if (kind === 'happy' || kind === 'laugh') { x.beginPath(); x.arc(cx, cy + 8, 16, Math.PI * 1.1, Math.PI * 1.9); x.stroke(); }
+    else if (kind === 'shock') { x.fillStyle = '#fff'; x.beginPath(); x.arc(cx, cy, 26, 0, 7); x.fill(); x.stroke(); x.fillStyle = '#1a1420'; x.beginPath(); x.arc(cx, cy, 9, 0, 7); x.fill(); }
+    else { x.beginPath(); x.arc(cx, cy, 12, 0, 7); x.fill(); }
+  };
+  eye(88, 105); eye(168, 105);
+  if (kind === 'laugh') { x.fillStyle = '#5a1f2b'; x.beginPath(); x.arc(128, 160, 42, 0, Math.PI); x.fill(); x.stroke(); }
+  else if (kind === 'shock') { x.fillStyle = '#5a1f2b'; x.beginPath(); x.ellipse(128, 178, 22, 30, 0, 0, 7); x.fill(); x.stroke(); }
+  else if (kind === 'happy') { x.beginPath(); x.arc(128, 150, 34, .15 * Math.PI, .85 * Math.PI); x.stroke(); }
+  else { x.beginPath(); x.arc(128, 145, 26, .2 * Math.PI, .8 * Math.PI); x.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const FACES = Object.fromEntries(['neutral', 'happy', 'laugh', 'shock'].map(k => [k, faceTexture(k)]));
+
+/* ---------- bean character ---------- */
+function bean({ body = 0xf3d9c0, shirt = 0x2f6fb3, hat = 0x8a5a2b, scarf = null, scale = 1 }) {
+  const g = new THREE.Group();
+  const torso = outlined(new THREE.Mesh(new THREE.CapsuleGeometry(.55, .9, 8, 24), toon(shirt)), .05);
+  torso.position.y = 1.35; g.add(torso);
+  const head = outlined(new THREE.Mesh(new THREE.SphereGeometry(.62, 32, 24), toon(body)), .05);
+  head.position.y = 2.55; g.add(head);
+  const faceMat = new THREE.MeshBasicMaterial({ map: FACES.neutral, transparent: true });
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(.95, .95), faceMat);
+  face.position.set(0, 0, .6); head.add(face);
+  const cap = outlined(new THREE.Mesh(new THREE.SphereGeometry(.64, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2.4), toon(hat)), .05);
+  cap.position.y = .08; head.add(cap);
+  const brim = outlined(new THREE.Mesh(new THREE.CylinderGeometry(.5, .5, .06, 24, 1, false, 0, Math.PI), toon(hat)), .06);
+  brim.position.set(0, .32, .32); brim.rotation.set(0.25, Math.PI / 2, 0); head.add(brim);
+  if (scarf) { const s = outlined(new THREE.Mesh(new THREE.TorusGeometry(.42, .13, 10, 24), toon(scarf)), .06); s.rotation.x = Math.PI / 2; s.position.y = 2.0; g.add(s); }
+  const limb = (len) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, len, 6), new THREE.MeshBasicMaterial({ color: 0x1a1420 })); m.castShadow = true; return m; };
+  const legs = [-.25, .25].map(xo => { const p = new THREE.Group(); p.position.set(xo, .62, 0); const l = limb(.65); l.position.y = -.32; p.add(l); g.add(p); return p; });
+  const arms = [-1, 1].map(sd => { const p = new THREE.Group(); p.position.set(sd * .55, 1.7, 0); const l = limb(.8); l.position.y = -.4; p.add(l);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(.1, 10, 8), new THREE.MeshBasicMaterial({ color: 0x1a1420 })); hand.position.y = -.82; p.add(hand); g.add(p); return p; });
+  g.scale.setScalar(scale);
+  scene.add(g);
+  return { g, head, torso, face, faceMat, legs, arms, setFace(k) { faceMat.map = FACES[k]; } };
+}
+
+const hero = bean({ shirt: 0x2f8f5b, hat: 0x7a4a26, scarf: 0xf0a020 });
+hero.g.position.set(0, 0, 0);
+const laughA = bean({ shirt: 0x9b3d5a, hat: 0x34495e, body: 0xe8c3a0 });
+laughA.g.position.set(-3.6, 0, -0.8); laughA.g.rotation.y = 0.7;
+const laughB = bean({ shirt: 0x4b5fb8, hat: 0xa83232, body: 0xf6dcc6 });
+laughB.g.position.set(-5.2, 0, -2.4); laughB.g.rotation.y = 0.8;
+
+/* ---------- the coin ---------- */
+const goldMat = toon(0xffc21a, { emissive: 0x6a3d00, emissiveIntensity: .35 });
+const coinGeo = new THREE.CylinderGeometry(.24, .24, .06, 32);
+const coin = outlined(new THREE.Mesh(coinGeo, goldMat), .08);
+coin.rotation.x = Math.PI / 2; scene.add(coin);
+
+/* sparkle sprites */
+function starTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  x.fillStyle = '#fff6c4'; x.beginPath();
+  for (let i = 0; i < 8; i++) { const r = i % 2 ? 7 : 30, a = i * Math.PI / 4; x.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); }
+  x.fill(); const t = new THREE.CanvasTexture(c); return t;
+}
+const starTex = starTexture();
+const sparkles = [...Array(6)].map(() => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: starTex, transparent: true, depthWrite: false, fog: false })); scene.add(s); return s; });
+
+/* dirt particles */
+const dirtBits = [...Array(14)].map(() => { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(.08, 0), toon(0x5a3b26)); m.castShadow = true; scene.add(m); return m; });
+
+/* ---------- the money tree ---------- */
+const tree = new THREE.Group(); tree.position.copy(PLANT); scene.add(tree);
+const trunk = outlined(new THREE.Mesh(new THREE.CylinderGeometry(.22, .38, 3.4, 10), toon(0x7a4b2a)), .05);
+trunk.position.y = 1.7; tree.add(trunk);
+const branches = [];
+const R = rng(42);
+for (let i = 0; i < 6; i++) {
+  const b = outlined(new THREE.Mesh(new THREE.CylinderGeometry(.07, .12, 1.6, 6), toon(0x7a4b2a)), .06);
+  const a = i / 6 * Math.PI * 2;
+  b.position.set(Math.cos(a) * .55, 2.7 + (i % 2) * .4, Math.sin(a) * .55);
+  b.rotation.set(Math.sin(a) * .9, 0, -Math.cos(a) * .9);
+  tree.add(b); branches.push(b);
+}
+const crown = outlined(new THREE.Mesh(new THREE.IcosahedronGeometry(1.9, 1), toon(0x3fae55, { flatShading: true })), .03);
+crown.position.y = 4.0; tree.add(crown);
+const treeCoins = [];
+for (let i = 0; i < 46; i++) {
+  const c = new THREE.Mesh(new THREE.CylinderGeometry(.2, .2, .05, 20), goldMat); c.castShadow = true;
+  const th = R() * Math.PI * 2, ph = Math.acos(2 * R() - 1) * .8;
+  const r = 2.0;
+  c.position.set(Math.sin(ph) * Math.cos(th) * r, 4.0 + Math.cos(ph) * r * .85 - .3, Math.sin(ph) * Math.sin(th) * r);
+  c.lookAt(c.position.clone().multiplyScalar(2).setY(c.position.y)); c.rotateX(Math.PI / 2);
+  c.userData.delay = R() * .35; c.userData.spin = R() * 6;
+  tree.add(c); treeCoins.push(c);
+}
+const sprout = outlined(new THREE.Mesh(new THREE.ConeGeometry(.12, .5, 6), toon(0x56c25e)), .1);
+sprout.position.copy(PLANT); scene.add(sprout);
+
+/* falling coins at the end */
+const fallers = [...Array(22)].map(() => {
+  const c = new THREE.Mesh(new THREE.CylinderGeometry(.18, .18, .05, 18), goldMat); c.castShadow = true;
+  c.userData = { x: PLANT.x + (R() - .5) * 5, z: PLANT.z + (R() - .5) * 4, t0: 4.1 + R() * .8, spin: R() * 9, y0: 6 + R() * 2 };
+  scene.add(c); return c;
+});
+
+/* ---------- camera path (continuous; no hard cuts) ---------- */
+// [time, position, lookAt]
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const camKeys = [
+  [0.00, V(1.5, 2.9, 5.6), V(0.35, 2.05, 0)],   // medium close on hero holding coin
+  [1.20, V(1.2, 2.8, 4.6), V(0.35, 2.15, 0)],   // slow push-in
+  [1.42, V(3.6, 2.6, 8.2), V(0.6, 1.0, 0.3)],   // whip-pan down to the ground
+  [2.30, V(3.8, 2.8, 9.0), V(0.2, 1.3, 0.0)],   // planting, mid-wide
+  [3.00, V(2.2, 5.0, 13.5), V(-2.5, 1.4, -1.0)],// pull back to include the laughers
+  [3.70, V(2.3, 5.2, 13.8), V(-2.3, 1.4, -0.8)],// locked wide: time passes
+  [4.05, V(3.4, 1.3, 13.0), V(-1.2, 3.3, 0.0)], // tilt up as the tree bursts up
+  [5.00, V(3.9, 1.2, 14.0), V(-1.2, 3.5, 0.0)]  // slow drift on the reveal
+];
+function cameraAt(t) {
+  let i = 0; while (i < camKeys.length - 2 && t > camKeys[i + 1][0]) i++;
+  const [t0, p0, l0] = camKeys[i], [t1, p1, l1] = camKeys[i + 1];
+  const k = ease(seg(t, t0, t1));
+  camera.position.lerpVectors(p0, p1, k);
+  camera.lookAt(new THREE.Vector3().lerpVectors(l0, l1, k));
+}
+
+/* ---------- captions (1–2 words at a time, synced to the script) ---------- */
+const CAPTIONS = [
+  [0.00, 'He found'], [0.45, 'one coin.'],
+  [1.40, 'He planted'], [1.90, 'it.'],
+  [2.30, 'Everyone'], [2.65, 'laughed.'],
+  [3.00, '3 days'], [3.35, 'later,'],
+  [3.72, 'it grew'], [4.15, 'MONEY.']
+];
+const captionAt = t => { let c = ''; for (const [s, w] of CAPTIONS) if (t >= s) c = w; return c; };
+const captionStart = t => { let s0 = 0; for (const [s] of CAPTIONS) if (t >= s) s0 = s; return s0; };
+
+/* ---------- grade per beat (saturation tells the story) ---------- */
+function gradeAt(t) {
+  // [time, saturation, brightness]
+  const G = [[0, 1.05, 1.0], [1.3, 1.05, 1.0], [2.3, .85, 1.0], [2.9, .45, .98], [3.6, .45, .96], [3.9, 1.3, 1.04], [5, 1.3, 1.04]];
+  let i = 0; while (i < G.length - 2 && t > G[i + 1][0]) i++;
+  const k = ease(seg(t, G[i][0], G[i + 1][0]));
+  return { sat: lerp(G[i][1], G[i + 1][1], k), bri: lerp(G[i][2], G[i + 1][2], k) };
+}
+
+/* ---------- animate the world at time t ---------- */
+function setWorld(t) {
+  // sun: normal afternoon, then a fast sweep during "3 days later" (long shadows race across)
+  const sweep = seg(t, 3.0, 3.7);
+  const ang = lerp(0.6, 0.6 + Math.PI * 2 * 3, ease(sweep)); // three day cycles
+  const elev = sweep > 0 && sweep < 1 ? lerp(.35, .9, (Math.cos(ang * 1) + 1) / 2) : .9;
+  sun.position.set(Math.cos(ang) * 30, 30 * elev + 4, Math.sin(ang) * 20 + 18);
+  sun.target.position.set(0, 0, 0);
+  sun.intensity = sweep > 0 && sweep < 1 ? lerp(1.2, 3.2, (Math.cos(ang) + 1) / 2) : 3.2;
+
+  // hero: idle bob, holds coin up, then crouches to plant it
+  const bob = Math.sin(t * 6) * .03;
+  const crouch = ease(seg(t, 1.45, 1.8)) * (1 - ease(seg(t, 2.25, 2.6)));
+  const stepAside = ease(seg(t, 3.05, 3.6));
+  hero.g.position.set(lerp(0, .25, crouch) - stepAside * 1.3, 0, stepAside * .4);
+  hero.g.rotation.y = lerp(0.15, -0.55, crouch);
+  hero.torso.position.y = 1.35 + bob - crouch * .45;
+  hero.head.position.y = 2.55 + bob - crouch * .55;
+  hero.head.rotation.x = crouch * .45;
+  hero.legs.forEach(l => l.scale.y = 1 - crouch * .5);
+  const raise = 1 - ease(seg(t, 1.3, 1.5));
+  hero.arms[1].rotation.z = lerp(.25, 2.5, raise) * (1 - crouch) + crouch * .9;
+  hero.arms[1].rotation.x = -crouch * 1.1;
+  hero.arms[0].rotation.z = -.25 - Math.sin(t * 5) * .05;
+  hero.setFace(t > 3.8 ? 'happy' : t < 1.4 ? 'happy' : 'neutral');
+
+  // coin: held up and spinning, then pushed into the dirt
+  if (t < 1.45) {
+    coin.visible = true;
+    const hand = new THREE.Vector3(0, -.82, 0); hero.arms[1].children[0].parent.localToWorld(hand);
+    coin.position.copy(hand).add(new THREE.Vector3(0, .32, 0));
+    coin.rotation.set(Math.PI / 2, 0, t * 4);
+  } else {
+    const k = ease(seg(t, 1.55, 2.05));
+    coin.visible = t < 2.1;
+    coin.position.set(PLANT.x, lerp(1.0, -.05, k), PLANT.z);
+    coin.rotation.set(lerp(Math.PI / 2, 0, k), 0, 0);
+  }
+  sparkles.forEach((s, i) => {
+    const on = t < 1.35 ? 1 : (t > 3.85 ? 1 : 0);
+    const ph = (t * 1.6 + i / 6) % 1;
+    const base = t < 1.35 ? coin.position : new THREE.Vector3(PLANT.x, 4.0, PLANT.z);
+    const rad = t < 1.35 ? .55 : 2.6;
+    s.position.set(base.x + Math.cos(i * 1.7 + t) * rad, base.y + Math.sin(i * 2.3 + t * 1.3) * rad * .7, base.z + .3);
+    const sc = Math.sin(ph * Math.PI) * (t < 1.35 ? .28 : .6) * on;
+    s.scale.set(sc, sc, 1); s.material.rotation = t * 3 + i;
+  });
+
+  // dirt pop when the coin goes in
+  const pop = seg(t, 2.0, 2.55);
+  dirtBits.forEach((d, i) => {
+    const a = i / dirtBits.length * Math.PI * 2, sp = .7 + (i % 3) * .3;
+    d.visible = pop > 0 && pop < 1;
+    d.position.set(PLANT.x + Math.cos(a) * pop * sp, .05 + Math.sin(pop * Math.PI) * (.6 + (i % 4) * .15), PLANT.z + Math.sin(a) * pop * sp);
+  });
+
+  // laughers: laugh and shake, then shocked when the tree appears
+  [laughA, laughB].forEach((L, i) => {
+    const laughing = t > 2.3 && t < 3.85;
+    L.setFace(t >= 3.85 ? 'shock' : laughing ? 'laugh' : 'neutral');
+    const shake = laughing ? Math.sin(t * 38 + i) * .06 : 0;
+    L.torso.position.y = 1.35 + Math.abs(shake) * 2;
+    L.head.position.y = 2.55 + Math.abs(shake) * 2;
+    L.head.rotation.z = shake * 2;
+    L.arms[0].rotation.z = laughing ? -1.0 + shake * 3 : t >= 3.85 ? -2.6 : -.25;
+    L.arms[1].rotation.z = laughing ? .8 : t >= 3.85 ? 2.6 : .25;
+    const jump = t >= 3.85 ? Math.sin(seg(t, 3.85, 4.2) * Math.PI) * .5 : 0;
+    L.g.position.y = jump;
+  });
+
+  // sprout during the time-lapse, then the tree bursts up with overshoot
+  const sp = seg(t, 3.05, 3.7);
+  sprout.visible = t < 3.78 && sp > 0;
+  sprout.scale.setScalar(.3 + sp * 1.6); sprout.position.y = .25 * (.3 + sp * 1.6);
+  const g = seg(t, 3.72, 4.15);
+  const over = g < 1 ? easeOut(g) * (1 + Math.sin(g * Math.PI) * .25) : 1 + Math.sin((t - 4.15) * 9) * Math.exp(-(t - 4.15) * 5) * .06;
+  tree.visible = g > 0; tree.scale.set(over, over, over);
+  treeCoins.forEach(c => {
+    const k = easeOut(seg(t, 3.95 + c.userData.delay, 4.25 + c.userData.delay));
+    c.scale.setScalar(k * 1.0 + .0001);
+    c.rotation.y = c.userData.spin + t * 2;
+  });
+  fallers.forEach(c => {
+    const u = c.userData, dt = t - u.t0;
+    c.visible = dt > 0;
+    const y = Math.max(.03, u.y0 - 9 * dt * dt);
+    c.position.set(u.x, y, u.z);
+    c.rotation.set(t * u.spin, t * 2, 0);
+  });
+}
+
+/* ---------- compositing: grade + motion blur + captions ---------- */
+const out = document.getElementById('out');
+const ctx = out.getContext('2d');
+let fontReady = document.fonts.load('900 120px Nunito');
+
+function drawCaption(t) {
+  const text = captionAt(t); if (!text) return;
+  const age = t - captionStart(t);
+  const pop = 1 + .18 * Math.max(0, 1 - age / .12);   // tiny pop on each new caption
+  ctx.save();
+  ctx.translate(W / 2, H * 0.66); ctx.scale(pop, pop);
+  ctx.font = `900 ${text === 'MONEY.' ? 150 : 118}px Nunito`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowOffsetY = 10; ctx.shadowBlur = 18;
+  ctx.lineWidth = 22; ctx.strokeStyle = '#1a1420'; ctx.strokeText(text, 0, 0);
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = text === 'MONEY.' ? '#ffd23a' : '#ffffff'; ctx.fillText(text, 0, 0);
+  ctx.restore();
+}
+
+function renderAt(t, sub = 1) {
+  setWorld(t); cameraAt(t);
+  renderer.render(scene, camera);
+}
+
+// whip-pan window: average several sub-frames for real motion blur
+const BLUR = [1.18, 1.46];
+window.renderFrame = async (i) => {
+  await fontReady;
+  const t = i / FPS;
+  const { sat, bri } = gradeAt(t);
+  ctx.filter = `saturate(${sat}) brightness(${bri})`;
+  const blurring = t > BLUR[0] && t < BLUR[1];
+  const n = blurring ? 8 : 1;
+  ctx.globalAlpha = 1;
+  for (let s = 0; s < n; s++) {
+    const ts = t + (s / n) * (1 / FPS) * (blurring ? 2.5 : 0);
+    renderAt(ts);
+    ctx.globalAlpha = 1 / (s + 1);
+    ctx.drawImage(glCanvas, 0, 0);
+  }
+  ctx.globalAlpha = 1; ctx.filter = 'none';
+  // soft vignette
+  const v = ctx.createRadialGradient(W / 2, H * .45, H * .3, W / 2, H * .5, H * .75);
+  v.addColorStop(0, 'rgba(40,20,60,0)'); v.addColorStop(1, 'rgba(40,20,60,.28)');
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+  drawCaption(t);
+  return out.toDataURL('image/jpeg', 0.93);
+};
+window.TOTAL_FRAMES = Math.round(DURATION * FPS);
+window.sceneReady = true;
+</script>
+</body></html>
