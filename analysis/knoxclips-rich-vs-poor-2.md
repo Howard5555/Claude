@@ -79,3 +79,35 @@ Contrast stays moderate. Day shots are high-key with no crushed blacks (shadow f
 
 - Integrated loudness **−14 LUFS**, loudness range **1.8 LU**: loud and heavily compressed, so the level barely moves.
 - Voice, music and sound-effect details could not be analysed here (no speech or source-separation model was available offline).
+
+## Every-frame measurements (417 frames at 30 fps)
+
+Per-frame data: `rich-vs-poor-2/frames.csv`. Timeline chart: `rich-vs-poor-2/timeline.png`.
+Measured on the video area only, with the phone's YouTube buttons cropped out. Caption timings are read at 6 fps (±0.17 s).
+Brightness, shadows and highlights are on a 0–255 scale: shadows are the 10th percentile, highlights the 90th, and contrast range is highlights minus shadows. Motion is the average frame-to-frame change ×1000. Warmth is V−U: positive means warm, negative cool.
+
+| Time (s) | Frames | Brightness | Shadows | Highlights | Contrast range | Saturation | Motion | Warmth | Shot | Caption |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0.0–2.0 | 59 | 181 | 112 | 227 | 115 | 25.1 | 26.1 | +13 | God hand drains town of coins | away everyone's wealth. |
+| 2.0–2.2 | 6 | 182 | 131 | 223 | 92 | 26.6 | 14.8 | −2 | Whip-pan down to street | – |
+| 2.2–2.8 | 18 | 173 | 89 | 228 | 139 | 39.2 | 14.3 | +38 | Rich man in coin tornado | Every coin, |
+| 2.8–3.8 | 30 | 167 | 56 | 229 | 172 | 27.6 | 37.5 | +23 | House lifts off, camera tilts up | every house, |
+| 3.8–4.6 | 24 | 159 | 88 | 216 | 127 | 39.0 | 22.7 | +16 | Fields peel away into sky | every field: |
+| 4.6–4.8 | 6 | 172 | 115 | 213 | 99 | 22.7 | 12.0 | +10 | Dissolve | – |
+| 4.8–5.5 | 21 | 164 | 66 | 223 | 157 | 10.9 | 15.8 | +9 | Same man now in a barrel, tumbleweed | gone. |
+| 5.5–6.0 | 15 | 172 | 92 | 221 | 129 | 8.0 | 12.9 | +8 | Pull back to wide | Everyone is poor. |
+| 6.0–7.9 | 57 | 180 | 111 | 226 | 114 | 7.1 | 7.4 | +10 | Locked-off wide, shivering | Everyone is hungry. |
+| 7.9–8.8 | 27 | 165 | 110 | 205 | 95 | 6.9 | 32.8 | +7 | Long shadows sweep, tilt to sky | 3 days later, |
+| 8.8–10.1 | 39 | 182 | 98 | 228 | 130 | 8.8 | 15.4 | +5 | Hand drops one chicken each | He gives each person one chicken. |
+| 10.1–10.8 | 21 | 182 | 123 | 223 | 99 | 25.2 | 11.2 | +5 | Fast push-in to group | The first |
+| 10.8–12.1 | 39 | 175 | 95 | 224 | 129 | 29.4 | 18.6 | +27 | Three barrels with chickens | group is so hungry, |
+| 12.1–12.3 | 6 | 122 | 66 | 170 | 104 | 26.6 | 28.6 | +18 | Dissolve to night | – |
+| 12.3–13.9 | 48 | 95 | 33 | 168 | 135 | 30.5 | 10.5 | +19 | Night campfire | they cook their chicken that same night. |
+
+What the frame data shows:
+- **There are no hard cuts.** The frame-to-frame change never jumps the way a cut does, except once: the dissolve to night at 12.1 s, the biggest visual change in the video. The spike at 0.8 s is the YouTube play button on the phone, not the video. Everything else is continuous camera movement or soft dissolves.
+- **Colour drives the story more than brightness does.** Brightness stays almost flat (160–185) through the whole day section, but saturation swings from ~48 at "every field" down to ~7 for "poor / hungry". It climbs back to ~30 only when the chickens bring hope.
+- **Warmth peaks on the money.** The coin tornado is the warmest moment (+48). The poverty section sits near neutral (+5 to +10), and warmth returns with the chickens (+27).
+- **Contrast is widest on the most dramatic action.** The house lifting off has the deepest shadows (56) and the widest range (172). The flat "everyone is hungry" wide is the calmest shot (lowest motion, 7.4), held longest (1.9 s) so the emptiness sinks in.
+- **"3 days later" is told with light.** Brightness dips three times (to ~125–150) as long shadows sweep across the square, like time-lapse sun movement.
+- **Night halves the brightness** (180 → 95) and drops the shadows to 33. The orange fire keeps warmth positive (+19) against the blue-purple ambient.
