@@ -1,0 +1,72 @@
+{
+ "phrases": [
+  {
+   "text": "He found one coin.",
+   "start": 0.08,
+   "end": 1.038
+  },
+  {
+   "text": "He planted it.",
+   "start": 1.298,
+   "end": 2.038
+  },
+  {
+   "text": "Everyone laughed.",
+   "start": 2.138,
+   "end": 3.022
+  },
+  {
+   "text": "Three days later,",
+   "start": 3.122,
+   "end": 4.044
+  },
+  {
+   "text": "it grew money.",
+   "start": 4.144,
+   "end": 4.886
+  }
+ ],
+ "captions": [
+  [
+   0.08,
+   "He found"
+  ],
+  [
+   0.536,
+   "one coin."
+  ],
+  [
+   1.298,
+   "He planted"
+  ],
+  [
+   1.821,
+   "it."
+  ],
+  [
+   2.138,
+   "Everyone"
+  ],
+  [
+   2.58,
+   "laughed."
+  ],
+  [
+   3.122,
+   "3 days"
+  ],
+  [
+   3.676,
+   "later,"
+  ],
+  [
+   4.144,
+   "it grew"
+  ],
+  [
+   4.537,
+   "MONEY."
+  ]
+ ],
+ "duration": 5.536
+}
