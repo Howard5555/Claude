@@ -1,0 +1,261 @@
+{
+ "phrases": [
+  {
+   "text": "This man sold the Brooklyn Bridge.",
+   "start": 0.1,
+   "end": 1.953
+  },
+  {
+   "text": "Not once.",
+   "start": 2.033,
+   "end": 2.785
+  },
+  {
+   "text": "Again and again.",
+   "start": 2.845,
+   "end": 3.789
+  },
+  {
+   "text": "He'd find newcomers fresh off the boat,",
+   "start": 4.089,
+   "end": 5.97
+  },
+  {
+   "text": "flash his official-looking papers,",
+   "start": 6.05,
+   "end": 7.882
+  },
+  {
+   "text": "and make an offer:",
+   "start": 7.962,
+   "end": 8.88
+  },
+  {
+   "text": "buy the bridge, and charge a toll to cross it.",
+   "start": 8.98,
+   "end": 11.413
+  },
+  {
+   "text": "They paid him in cash.",
+   "start": 11.533,
+   "end": 12.721
+  },
+  {
+   "text": "The next morning, they set up a toll booth,",
+   "start": 13.021,
+   "end": 15.245
+  },
+  {
+   "text": "until the police dragged them away.",
+   "start": 15.345,
+   "end": 16.967
+  },
+  {
+   "text": "He was finally caught,",
+   "start": 17.267,
+   "end": 18.404
+  },
+  {
+   "text": "and spent the rest of his life in prison.",
+   "start": 18.484,
+   "end": 20.347
+  },
+  {
+   "text": "But his trick lives on:",
+   "start": 20.647,
+   "end": 21.851
+  },
+  {
+   "text": "If you believe that, I've got a bridge to sell you.",
+   "start": 21.971,
+   "end": 24.53
+  }
+ ],
+ "captions": [
+  [
+   0.1,
+   "This man"
+  ],
+  [
+   0.588,
+   "sold the"
+  ],
+  [
+   1.075,
+   "Brooklyn Bridge."
+  ],
+  [
+   2.033,
+   "Not once."
+  ],
+  [
+   2.845,
+   "Again"
+  ],
+  [
+   3.193,
+   "and again."
+  ],
+  [
+   4.089,
+   "He'd find"
+  ],
+  [
+   4.559,
+   "newcomers"
+  ],
+  [
+   5.029,
+   "fresh off"
+  ],
+  [
+   5.5,
+   "the boat,"
+  ],
+  [
+   6.05,
+   "flash his"
+  ],
+  [
+   6.567,
+   "official-"
+  ],
+  [
+   7.084,
+   "looking papers,"
+  ],
+  [
+   7.962,
+   "and make"
+  ],
+  [
+   8.399,
+   "an offer:"
+  ],
+  [
+   8.98,
+   "buy the"
+  ],
+  [
+   9.401,
+   "bridge,"
+  ],
+  [
+   9.822,
+   "and charge"
+  ],
+  [
+   10.384,
+   "a toll"
+  ],
+  [
+   10.758,
+   "to cross it."
+  ],
+  [
+   11.533,
+   "They paid"
+  ],
+  [
+   12.036,
+   "him in"
+  ],
+  [
+   12.401,
+   "CASH."
+  ],
+  [
+   13.021,
+   "The next"
+  ],
+  [
+   13.485,
+   "morning,"
+  ],
+  [
+   13.948,
+   "they set up"
+  ],
+  [
+   14.55,
+   "a toll booth,"
+  ],
+  [
+   15.345,
+   "until"
+  ],
+  [
+   15.629,
+   "the police"
+  ],
+  [
+   16.116,
+   "dragged"
+  ],
+  [
+   16.481,
+   "them away."
+  ],
+  [
+   17.267,
+   "He was"
+  ],
+  [
+   17.617,
+   "finally"
+  ],
+  [
+   18.01,
+   "caught,"
+  ],
+  [
+   18.484,
+   "and spent"
+  ],
+  [
+   18.929,
+   "the rest"
+  ],
+  [
+   19.334,
+   "of his life"
+  ],
+  [
+   19.861,
+   "in prison."
+  ],
+  [
+   20.647,
+   "But his"
+  ],
+  [
+   21.048,
+   "trick"
+  ],
+  [
+   21.36,
+   "lives on:"
+  ],
+  [
+   21.971,
+   "If you"
+  ],
+  [
+   22.33,
+   "believe that,"
+  ],
+  [
+   23.004,
+   "I've got"
+  ],
+  [
+   23.453,
+   "a bridge"
+  ],
+  [
+   23.902,
+   "to sell you."
+  ]
+ ],
+ "duration": 25.63
+}
